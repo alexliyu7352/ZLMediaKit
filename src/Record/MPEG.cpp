@@ -62,6 +62,7 @@ bool MpegMuxer::inputFrame(const Frame::Ptr &frame) {
             //这里的代码逻辑是让SPS、PPS、IDR这些时间戳相同的帧打包到一起当做一个帧处理，
             return _frame_merger.inputFrame(frame,[&](uint32_t dts, uint32_t pts, const Buffer::Ptr &buffer, bool have_idr) {
                 _key_pos = have_idr;
+                WarnL << "[video]pts-->" << pts << "    dts-->" << dts;
                 //取视频时间戳为TS的时间戳
                 _timestamp = (uint32_t) dts;
                 _max_cache_size = 512 + 1.2 * buffer->size();
@@ -82,6 +83,7 @@ bool MpegMuxer::inputFrame(const Frame::Ptr &frame) {
                 //没有视频时，才以音频时间戳为TS的时间戳
                 _timestamp = (uint32_t) frame->dts();
             }
+            WarnL << "[audio]pts-->" << frame->pts() << "    dts-->" << frame->dts();
             _max_cache_size = 512 + 1.2 * frame->size();
             mpeg_muxer_input(_context, track_id, frame->keyFrame() ? 0x0001 : 0, frame->pts() * 90LL, frame->dts() * 90LL, frame->data(), frame->size());
             flushCache();

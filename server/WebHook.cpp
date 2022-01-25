@@ -45,9 +45,11 @@ const string kOnServerStarted = HOOK_FIELD"on_server_started";
 const string kOnServerKeepalive = HOOK_FIELD"on_server_keepalive";
 const string kAdminParams = HOOK_FIELD"admin_params";
 const string kAliveInterval = HOOK_FIELD"alive_interval";
+const string kAliveWithMediaInfo = HOOK_FIELD"alive_with_media_info";
 
 onceToken token([](){
     mINI::Instance()[kEnable] = false;
+    mINI::Instance()[kAliveWithMediaInfo] = true;
     mINI::Instance()[kTimeoutSec] = 10;
     //默认hook地址设置为空，采用默认行为(例如不鉴权)
     mINI::Instance()[kOnPublish] = "";
@@ -169,7 +171,8 @@ void do_http_hook(const string &url,const ArgsType &body,const function<void(con
             }
             if (!err.empty()) {
                 WarnL << "hook " << url << " " << pTicker->elapsedTime() << "ms,failed" << err << ":" << bodyStr;
-            } else if (pTicker->elapsedTime() > 500) {
+            } else if (pTicker->elapsedTime() > 5000) {
+                // 改成500->2500 因为公网环境下0.5秒太少了, 会导致日志增加很多.
                 DebugL << "hook " << url << " " << pTicker->elapsedTime() << "ms,success:" << bodyStr;
             }
         });
@@ -206,6 +209,7 @@ static Timer::Ptr g_keepalive_timer;
 static void reportServerKeepalive() {
     GET_CONFIG(bool, hook_enable, Hook::kEnable);
     GET_CONFIG(string, hook_server_keepalive, Hook::kOnServerKeepalive);
+    GET_CONFIG(bool, hook_with_media_info, Hook::kAliveWithMediaInfo);
     if (!hook_enable || hook_server_keepalive.empty()) {
         return;
     }
@@ -215,6 +219,12 @@ static void reportServerKeepalive() {
         getStatisticJson([](const Value &data) mutable {
             ArgsType body;
             body["data"] = data;
+            if(hook_with_media_info) {
+                //获取所有MediaSource列表
+                MediaSource::for_each_media([&](const MediaSource::Ptr &media) {
+                    body["data"]["stream"].append(makeSimpleMediaSourceJson(*media));
+                }, "ts");
+            }
             //执行hook
             do_http_hook(hook_server_keepalive, body, nullptr);
         });
